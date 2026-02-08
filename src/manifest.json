@@ -1,0 +1,25 @@
+{
+  "name": "RideSheet Routeline",
+  "organization": "Full Path LLC",
+  "description": "Demand-responsive transit timeline visualization showing vehicle runs and passenger trips",
+  "logoUrl": "https://docs.ridesheet.org/images/ridesheet-logo-color.png",
+  "packageUrl": "https://docs.ridesheet.org",
+  "organizationUrl": "https://fullpath.io",
+  "supportUrl": "https://docs.ridesheet.org/about",
+  "privacyPolicyUrl": "https://docs.ridesheet.org/privacy",
+  "termsOfServiceUrl": "https://docs.ridesheet.org/terms",
+  "devMode": true,
+  "components": [
+    {
+      "id": "routeline",
+      "name": "RideSheet Routeline",
+      "description": "Demand-responsive transit timeline visualization showing vehicle runs and passenger trips",
+      "iconUrl": "https://docs.ridesheet.org/images/ridesheet-logo-color.png",
+      "resource": {
+        "js": "gs://ridesheet-routeline/index.js",
+        "config": "gs://ridesheet-routeline/index.json",
+        "css": "gs://ridesheet-routeline/index.css"
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "data": [
+    {
+      "id": "main",
+      "label": "Trip Data",
+      "elements": [
+        {
+          "id": "vehicleId",
+          "label": "Vehicle ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "customerId",
+          "label": "Customer Name and ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "puTime",
+          "label": "PU Time",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "doTime",
+          "label": "DO Time",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "puAddress",
+          "label": "PU Address",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "doAddress",
+          "label": "DO Address",
+          "type": "DIMENSION",
+          "options": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ]
+    }
+  ],
+  "style": [
+    {
+      "id": "lineColor",
+      "label": "Trip Line Color",
+      "type": "FILL_COLOR",
+      "defaultValue": "#2563eb"
+    },
+    {
+      "id": "pickupColor",
+      "label": "Pickup Marker Color",
+      "type": "FILL_COLOR",
+      "defaultValue": "#10b981"
+    },
+    {
+      "id": "dropoffColor",
+      "label": "Dropoff Marker Color",
+      "type": "FILL_COLOR",
+      "defaultValue": "#ef4444"
+    }
+  ],
+  "interactions": []
+}
