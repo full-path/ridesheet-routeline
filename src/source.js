@@ -68,7 +68,11 @@ function transformLookerData(data) {
 
   console.log('Field indices map:', fieldIndices);
 
+  const tripDateIdx = fieldIndices.tripDate;
   const vehicleIdIdx = fieldIndices.vehicleId;
+  const driverIdIdx = fieldIndices.driverId;
+  const runStartTimeIdx = fieldIndices.runStartTime;
+  const runEndTimeIdx = fieldIndices.runEndTime;
   const customerIdIdx = fieldIndices.customerId;
   const puTimeIdx = fieldIndices.puTime;
   const doTimeIdx = fieldIndices.doTime;
@@ -76,7 +80,11 @@ function transformLookerData(data) {
   const doAddressIdx = fieldIndices.doAddress;
 
   console.log('Field indices:', {
+    tripDateIdx,
     vehicleIdIdx,
+    driverIdIdx,
+    runStartTimeIdx,
+    runEndTimeIdx,
     customerIdIdx,
     puTimeIdx,
     doTimeIdx,
@@ -84,22 +92,18 @@ function transformLookerData(data) {
     doAddressIdx
   });
 
-  // Group trips by vehicle
-  const vehicleTrips = {};
+  // Group trips by composite key: tripDate + vehicleId + driverId
+  const runGroups = {};
 
   console.log('Processing rows...');
-
-  if (!Array.isArray(rows)) {
-    throw new Error('Rows is not an array. Type: ' + typeof rows);
-  }
 
   if (rows.length === 0) {
     console.warn('No rows to process');
     return { runs: [] };
   }
 
-  // Filter out rows where vehicleId is null
-  const validRows = rows.filter(row => row[vehicleIdIdx] != null);
+  // Filter out rows where tripDate is null
+  const validRows = rows.filter(row => row[tripDateIdx] != null);
   console.log('Valid rows after filtering nulls:', validRows.length);
 
   validRows.forEach((row, index) => {
@@ -107,7 +111,11 @@ function transformLookerData(data) {
       console.log(`Row ${index}:`, row);
     }
 
-    const vehicleId = row[vehicleIdIdx];
+    const tripDate = row[tripDateIdx];
+    const vehicleId = row[vehicleIdIdx] || 'Unassigned';
+    const driverId = row[driverIdIdx] || 'Unassigned';
+    const runStartTime = row[runStartTimeIdx];
+    const runEndTime = row[runEndTimeIdx];
     const customerId = row[customerIdIdx];
     const puTime = row[puTimeIdx];
     const doTime = row[doTimeIdx];
@@ -116,7 +124,11 @@ function transformLookerData(data) {
 
     if (index < 3) {
       console.log(`Row ${index} values:`, {
+        tripDate,
         vehicleId,
+        driverId,
+        runStartTime,
+        runEndTime,
         customerId,
         puTime,
         doTime,
@@ -125,16 +137,26 @@ function transformLookerData(data) {
       });
     }
 
-    if (!vehicleId) {
-      console.log(`Row ${index}: skipping - no vehicleId`);
+    if (!tripDate) {
+      console.log(`Row ${index}: skipping - no tripDate`);
       return;
     }
 
-    if (!vehicleTrips[vehicleId]) {
-      vehicleTrips[vehicleId] = [];
+    // Create composite key
+    const runKey = `${tripDate}|${vehicleId}|${driverId}`;
+
+    if (!runGroups[runKey]) {
+      runGroups[runKey] = {
+        tripDate: tripDate,
+        vehicleId: vehicleId,
+        driverId: driverId,
+        runStartTime: formatTimeValue(runStartTime),
+        runEndTime: formatTimeValue(runEndTime),
+        trips: []
+      };
     }
 
-    vehicleTrips[vehicleId].push({
+    runGroups[runKey].trips.push({
       tripId: customerId,
       pickupTime: formatTimeValue(puTime),
       dropoffTime: formatTimeValue(doTime),
@@ -143,25 +165,34 @@ function transformLookerData(data) {
     });
   });
 
-  console.log('Vehicle trips grouped:', vehicleTrips);
+  console.log('Run groups created:', runGroups);
 
-  // Convert to runs array and sort
+  // Convert to runs array
   const runs = [];
-  for (let vehicleId in vehicleTrips) {
+  for (let runKey in runGroups) {
+    const run = runGroups[runKey];
+
     // Sort trips by pickup time
-    vehicleTrips[vehicleId].sort((a, b) => {
+    run.trips.sort((a, b) => {
       if (a.pickupTime < b.pickupTime) return -1;
       if (a.pickupTime > b.pickupTime) return 1;
       return 0;
     });
 
-    runs.push({
-      vehicleId: vehicleId,
-      trips: vehicleTrips[vehicleId]
-    });
+    runs.push(run);
   }
 
-  console.log('Runs created:', runs);
+  // Sort runs: by vehicleId, then by driverId
+  runs.sort((a, b) => {
+    if (a.vehicleId < b.vehicleId) return -1;
+    if (a.vehicleId > b.vehicleId) return 1;
+    // Same vehicle, sort by driver
+    if (a.driverId < b.driverId) return -1;
+    if (a.driverId > b.driverId) return 1;
+    return 0;
+  });
+
+  console.log('Runs created and sorted:', runs);
   console.log('Returning data with', runs.length, 'runs');
 
   return { runs: runs };
@@ -222,17 +253,21 @@ function renderTimeline(containerId, data, styleConfig) {
   let lineColor = '#2563eb';
   let pickupColor = '#10b981';
   let dropoffColor = '#ef4444';
+  let runFillColor = '#f0f9ff';
+  let runBorderColor = '#bfdbfe';
+  let runBorderWidth = 1;
+  let runOpacity = 0.5;
 
   try {
-    console.log('Style config:', styleConfig);
-
     // Try flat structure first (actual Looker Studio format)
     if (styleConfig) {
       lineColor = styleConfig.lineColor?.value?.color || lineColor;
       pickupColor = styleConfig.pickupColor?.value?.color || pickupColor;
       dropoffColor = styleConfig.dropoffColor?.value?.color || dropoffColor;
-
-      console.log('Applied colors:', { lineColor, pickupColor, dropoffColor });
+      runFillColor = styleConfig.runFillColor?.value?.color || runFillColor;
+      runBorderColor = styleConfig.runBorderColor?.value?.color || runBorderColor;
+      runBorderWidth = styleConfig.runBorderWidth?.value || runBorderWidth;
+      runOpacity = styleConfig.runOpacity?.value || runOpacity;
     }
   } catch (error) {
     console.error('Error accessing style config:', error);
@@ -255,9 +290,20 @@ function renderTimeline(containerId, data, styleConfig) {
   const parseTime = d3.timeParse('%I:%M %p');
   const formatTime = d3.timeFormat('%I:%M %p');
 
-  // Collect all times
+  // Collect all times (trips + run schedules)
   const allTimes = [];
   data.runs.forEach(run => {
+    // Add run schedule times
+    if (run.runStartTime) {
+      const runStart = parseTime(run.runStartTime);
+      if (runStart) allTimes.push(runStart);
+    }
+    if (run.runEndTime) {
+      const runEnd = parseTime(run.runEndTime);
+      if (runEnd) allTimes.push(runEnd);
+    }
+
+    // Add trip times
     run.trips.forEach(trip => {
       allTimes.push(parseTime(trip.pickupTime));
       allTimes.push(parseTime(trip.dropoffTime));
@@ -275,9 +321,11 @@ function renderTimeline(containerId, data, styleConfig) {
     ])
     .range([0, width]);
 
-  // Vehicle scale - sort vehicles alphabetically
+  // Vehicle scale - create composite identifier for each run
+  const runIds = data.runs.map(r => `${r.vehicleId}|${r.driverId}`);
+
   const yScale = d3.scaleBand()
-    .domain(data.runs.map(r => r.vehicleId).sort())
+    .domain(runIds)
     .range([0, height])
     .padding(0.3);
 
@@ -308,27 +356,51 @@ function renderTimeline(containerId, data, styleConfig) {
       .attr('stroke-dasharray', '2,2');
   });
 
-  // Draw Y axis
+  // Draw Y axis with two-line labels
   const yAxis = d3.axisLeft(yScale)
     .tickSize(0)
-    .tickPadding(10);
+    .tickPadding(10)
+    .tickFormat(d => {
+      // Return composite ID for now, will be replaced with tspans
+      return d;
+    });
 
-  svg.append('g')
+  const yAxisGroup = svg.append('g')
     .attr('class', 'y-axis')
-    .call(yAxis)
-    .selectAll('text')
-    .style('font-size', '14px')
-    .style('font-weight', '500')
-    .attr('dy', '0.35em'); // Center text vertically
+    .call(yAxis);
+
+  // Replace text labels with two-line labels
+  yAxisGroup.selectAll('text')
+    .text('')  // Clear default text
+    .each(function(d) {
+      const [vehicleId, driverId] = d.split('|');
+      const text = d3.select(this);
+
+      // Vehicle ID on first line
+      text.append('tspan')
+        .attr('x', -10)
+        .attr('dy', '-0.3em')
+        .style('font-size', '14px')
+        .style('font-weight', '600')
+        .text(vehicleId);
+
+      // Driver ID on second line
+      text.append('tspan')
+        .attr('x', -10)
+        .attr('dy', '1.2em')
+        .style('font-size', '12px')
+        .style('font-weight', '400')
+        .style('fill', '#666')
+        .text(driverId);
+    });
 
   // Remove Y-axis line
-  svg.select('.y-axis path').remove();
+  yAxisGroup.select('path').remove();
 
-  // Draw horizontal lines between vehicles
-  const vehicles = data.runs.map(r => r.vehicleId);
-  vehicles.forEach((vehicleId, index) => {
+  // Draw horizontal lines between runs
+  runIds.forEach((runId, index) => {
     if (index > 0) {
-      const yPosition = yScale(vehicleId);
+      const yPosition = yScale(runId);
       svg.append('line')
         .attr('x1', 0)
         .attr('x2', width)
@@ -344,7 +416,7 @@ function renderTimeline(containerId, data, styleConfig) {
     .attr('x', width / 2)
     .attr('y', height + 35)
     .style('text-anchor', 'middle')
-    .style('font-size', '14px')
+    .style('font-size', '18px')
     .text('Time');
 
   svg.append('text')
@@ -352,7 +424,7 @@ function renderTimeline(containerId, data, styleConfig) {
     .attr('x', -height / 2)
     .attr('y', -80)
     .style('text-anchor', 'middle')
-    .style('font-size', '14px')
+    .style('font-size', '18px')
     .text('Vehicle');
 
   // Lane assignment function
@@ -393,9 +465,40 @@ function renderTimeline(containerId, data, styleConfig) {
     return tripsWithTimes;
   }
 
+  // Draw run schedule rectangles (background)
+  data.runs.forEach(run => {
+    const runId = `${run.vehicleId}|${run.driverId}`;
+    const runYBase = yScale(runId);
+    const runBandHeight = yScale.bandwidth();
+
+    if (run.runStartTime && run.runEndTime) {
+      const runStartParsed = parseTime(run.runStartTime);
+      const runEndParsed = parseTime(run.runEndTime);
+
+      if (runStartParsed && runEndParsed) {
+        const x1 = xScale(runStartParsed);
+        const x2 = xScale(runEndParsed);
+
+        // Draw run schedule rectangle
+        svg.append('rect')
+          .attr('x', x1)
+          .attr('y', runYBase)
+          .attr('rx', 5)
+          .attr('ry', 5)
+          .attr('width', x2 - x1)
+          .attr('height', runBandHeight)
+          .attr('fill', runFillColor)
+          .attr('stroke', runBorderColor)
+          .attr('stroke-width', runBorderWidth)
+          .attr('opacity', runOpacity);
+      }
+    }
+  });
+
   // Draw trips
   data.runs.forEach(run => {
-    const vehicleYBase = yScale(run.vehicleId);
+    const runId = `${run.vehicleId}|${run.driverId}`;
+    const vehicleYBase = yScale(runId);
     const vehicleBandHeight = yScale.bandwidth();
 
     const tripsWithLanes = assignLanes(run.trips, parseTime);
@@ -437,7 +540,7 @@ function renderTimeline(containerId, data, styleConfig) {
           tooltip.style.left = (event.pageX + 10) + 'px';
           tooltip.style.top = (event.pageY - 10) + 'px';
           tooltip.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px; color: ${lineColor}">
+            <div style="font-weight: 600; margin-bottom: 4px">
               ${trip.tripId}
             </div>
             <div style="margin-bottom: 2px"><strong>Pickup:</strong> ${trip.pickupTime}</div>
