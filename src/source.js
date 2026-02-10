@@ -259,7 +259,6 @@ function renderTimeline(containerId, data, styleConfig) {
   let runOpacity = 0.5;
 
   try {
-    // Try flat structure first (actual Looker Studio format)
     if (styleConfig) {
       lineColor = styleConfig.lineColor?.value?.color || lineColor;
       pickupColor = styleConfig.pickupColor?.value?.color || pickupColor;
@@ -321,113 +320,14 @@ function renderTimeline(containerId, data, styleConfig) {
     ])
     .range([0, width]);
 
-  // Vehicle scale - create composite identifier for each run
-  const runIds = data.runs.map(r => `${r.vehicleId}|${r.driverId}`);
+  // Constants for run height calculation
+  const lineSpacing = 10;           // Vertical spacing between trip lanes
+  const runPaddingTop = 15;         // Padding above trips
+  const runPaddingBottom = 15;      // Padding below trips
+  const minLabelHeight = 40;        // Minimum height for vehicle/driver labels
+  const runGap = 20;                // Gap between runs
 
-  const yScale = d3.scaleBand()
-    .domain(runIds)
-    .range([0, height])
-    .padding(0.3);
-
-  const lineSpacing = 10;
-
-  // Draw X axis
-  const xAxis = d3.axisBottom(xScale)
-    .ticks(d3.timeHour.every(1))
-    .tickFormat(formatTime);
-
-  svg.append('g')
-    .attr('class', 'x-axis')
-    .attr('transform', `translate(0,${height})`)
-    .call(xAxis)
-    .selectAll('text')
-    .style('font-size', '12px');
-
-  // Draw vertical grid lines
-  const xTicks = xScale.ticks(d3.timeHour.every(1));
-  xTicks.forEach(tick => {
-    svg.append('line')
-      .attr('x1', xScale(tick))
-      .attr('x2', xScale(tick))
-      .attr('y1', 0)
-      .attr('y2', height)
-      .attr('stroke', '#e5e7eb')
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '2,2');
-  });
-
-  // Draw Y axis with two-line labels
-  const yAxis = d3.axisLeft(yScale)
-    .tickSize(0)
-    .tickPadding(10)
-    .tickFormat(d => {
-      // Return composite ID for now, will be replaced with tspans
-      return d;
-    });
-
-  const yAxisGroup = svg.append('g')
-    .attr('class', 'y-axis')
-    .call(yAxis);
-
-  // Replace text labels with two-line labels
-  yAxisGroup.selectAll('text')
-    .text('')  // Clear default text
-    .each(function(d) {
-      const [vehicleId, driverId] = d.split('|');
-      const text = d3.select(this);
-
-      // Vehicle ID on first line
-      text.append('tspan')
-        .attr('x', -10)
-        .attr('dy', '-0.3em')
-        .style('font-size', '14px')
-        .style('font-weight', '600')
-        .text(vehicleId);
-
-      // Driver ID on second line
-      text.append('tspan')
-        .attr('x', -10)
-        .attr('dy', '1.2em')
-        .style('font-size', '12px')
-        .style('font-weight', '400')
-        .style('fill', '#666')
-        .text(driverId);
-    });
-
-  // Remove Y-axis line
-  yAxisGroup.select('path').remove();
-
-  // Draw horizontal lines between runs
-  runIds.forEach((runId, index) => {
-    if (index > 0) {
-      const yPosition = yScale(runId);
-      svg.append('line')
-        .attr('x1', 0)
-        .attr('x2', width)
-        .attr('y1', yPosition)
-        .attr('y2', yPosition)
-        .attr('stroke', '#d1d5db')
-        .attr('stroke-width', 1);
-    }
-  });
-
-  // Add axis labels
-  svg.append('text')
-    .attr('x', width / 2)
-    .attr('y', height + 35)
-    .style('text-anchor', 'middle')
-    .style('font-size', '18px')
-    .text('Time');
-
-  svg.append('text')
-    .attr('transform', 'rotate(-90)')
-    .attr('x', -height / 2)
-    .attr('y', -80)
-    .style('text-anchor', 'middle')
-    .style('font-size', '18px')
-    .text('Vehicle');
-
-  // Lane assignment function
+  // Pre-calculate lane assignments for all runs to determine heights
   function assignLanes(trips, parseTime) {
     const tripsWithTimes = trips.map(trip => ({
       ...trip,
@@ -465,11 +365,149 @@ function renderTimeline(containerId, data, styleConfig) {
     return tripsWithTimes;
   }
 
+  // Calculate positions and heights for each run based on lane count
+  const runPositions = {};
+  let currentY = 0;
+
+  data.runs.forEach((run, index) => {
+    const runId = `${run.vehicleId}|${run.driverId}`;
+    const tripsWithLanes = assignLanes(run.trips, parseTime);
+
+    // Determine max lane number
+    const maxLane = tripsWithLanes.length > 0
+      ? Math.max(...tripsWithLanes.map(t => t.lane))
+      : 0;
+
+    // Calculate height needed for trips
+    const tripsHeight = (maxLane + 1) * lineSpacing;
+
+    // Total run height: padding + trips + padding, with minimum for labels
+    const calculatedHeight = runPaddingTop + tripsHeight + runPaddingBottom;
+    const runHeight = Math.max(calculatedHeight, minLabelHeight);
+
+    runPositions[runId] = {
+      y: currentY,
+      height: runHeight,
+      tripsWithLanes: tripsWithLanes,
+      maxLane: maxLane
+    };
+
+    currentY += runHeight + runGap;
+  });
+
+  // Calculate total height needed
+  const totalHeight = currentY;
+
+  // Update SVG height
+  svg.select(function() { return this.parentNode; })
+    .attr('height', totalHeight + margin.top + margin.bottom);
+
+  // Helper functions to replace yScale
+  function getRunY(runId) {
+    return runPositions[runId].y;
+  }
+
+  function getRunHeight(runId) {
+    return runPositions[runId].height;
+  }
+
+  function getRunLanes(runId) {
+    return runPositions[runId].tripsWithLanes;
+  }
+
+  // Draw X axis
+  const xAxis = d3.axisBottom(xScale)
+    .ticks(d3.timeHour.every(1))
+    .tickFormat(formatTime);
+
+  svg.append('g')
+    .attr('class', 'x-axis')
+    .attr('transform', `translate(0,${totalHeight})`)
+    .call(xAxis)
+    .selectAll('text')
+    .style('font-size', '12px');
+
+  // Draw vertical grid lines
+  const xTicks = xScale.ticks(d3.timeHour.every(1));
+  xTicks.forEach(tick => {
+    svg.append('line')
+      .attr('x1', xScale(tick))
+      .attr('x2', xScale(tick))
+      .attr('y1', 0)
+      .attr('y2', totalHeight)
+      .attr('stroke', '#e5e7eb')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '2,2');
+  });
+
+  // Draw Y axis labels manually (no scale to use)
+  const yAxisGroup = svg.append('g')
+    .attr('class', 'y-axis');
+
+  data.runs.forEach(run => {
+    const runId = `${run.vehicleId}|${run.driverId}`;
+    const runY = getRunY(runId) + (runGap / 2);
+    const runHeight = getRunHeight(runId);
+    const labelY = runY + runHeight / 2; // Center label vertically in run
+
+    const labelGroup = yAxisGroup.append('g')
+      .attr('transform', `translate(-10, ${labelY})`);
+
+    const text = labelGroup.append('text')
+      .style('text-anchor', 'end');
+
+    // Vehicle ID on first line
+    text.append('tspan')
+      .attr('x', 0)
+      .attr('dy', '-0.3em')
+      .style('font-size', '14px')
+      .style('font-weight', '600')
+      .text(run.vehicleId);
+
+    // Driver ID on second line
+    text.append('tspan')
+      .attr('x', 0)
+      .attr('dy', '1.2em')
+      .style('font-size', '12px')
+      .style('font-weight', '400')
+      .style('fill', '#666')
+      .text(run.driverId);
+  });
+
+  // Draw horizontal lines between runs
+  data.runs.forEach((run, index) => {
+    const runId = `${run.vehicleId}|${run.driverId}`;
+    const yPosition = getRunY(runId);
+    svg.append('line')
+      .attr('x1', 0)
+      .attr('x2', width)
+      .attr('y1', yPosition)
+      .attr('y2', yPosition)
+      .attr('stroke', '#d1d5db')
+      .attr('stroke-width', 1);
+  });
+
+  // Add axis labels
+  //svg.append('text')
+  //  .attr('x', width / 2)
+  //  .attr('y', totalHeight + 35)
+  //  .style('text-anchor', 'middle')
+  //  .style('font-size', '18px')
+  //  .text('Time');
+
+  //svg.append('text')
+  //  .attr('transform', 'rotate(-90)')
+  //  .attr('x', -totalHeight / 2)
+  //  .attr('y', -80)
+  //  .style('text-anchor', 'middle')
+  //  .style('font-size', '18px')
+  //  .text('Vehicle');
+
   // Draw run schedule rectangles (background)
   data.runs.forEach(run => {
     const runId = `${run.vehicleId}|${run.driverId}`;
-    const runYBase = yScale(runId);
-    const runBandHeight = yScale.bandwidth();
+    const runYBase = getRunY(runId) + (runGap / 2);
+    const runHeight = getRunHeight(runId);
 
     if (run.runStartTime && run.runEndTime) {
       const runStartParsed = parseTime(run.runStartTime);
@@ -486,7 +524,7 @@ function renderTimeline(containerId, data, styleConfig) {
           .attr('rx', 5)
           .attr('ry', 5)
           .attr('width', x2 - x1)
-          .attr('height', runBandHeight)
+          .attr('height', runHeight)
           .attr('fill', runFillColor)
           .attr('stroke', runBorderColor)
           .attr('stroke-width', runBorderWidth)
@@ -498,17 +536,18 @@ function renderTimeline(containerId, data, styleConfig) {
   // Draw trips
   data.runs.forEach(run => {
     const runId = `${run.vehicleId}|${run.driverId}`;
-    const vehicleYBase = yScale(runId);
-    const vehicleBandHeight = yScale.bandwidth();
+    const runYBase = getRunY(runId) + (runGap / 2);
+    const runHeight = getRunHeight(runId);
+    const tripsWithLanes = getRunLanes(runId);
 
-    const tripsWithLanes = assignLanes(run.trips, parseTime);
+    // Calculate bundle height from lanes
+    const maxLane = tripsWithLanes.length > 0
+      ? Math.max(...tripsWithLanes.map(t => t.lane))
+      : 0;
+    const bundleHeight = maxLane * lineSpacing;
 
-    // Calculate maximum lane number to determine bundle height
-    const maxLane = Math.max(...tripsWithLanes.map(t => t.lane));
-    const bundleHeight = (maxLane + 1) * lineSpacing;
-
-    // Center the bundle within the vehicle band
-    const yOffset = vehicleYBase + (vehicleBandHeight - bundleHeight) / 2;
+    // Center the bundle within the run
+    const yOffset = runYBase + (runHeight - bundleHeight) / 2;
 
     tripsWithLanes.forEach((trip) => {
       const yPosition = yOffset + trip.lane * lineSpacing;
