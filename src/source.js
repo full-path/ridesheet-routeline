@@ -15,19 +15,15 @@ function drawViz(data) {
     const newContainer = document.createElement('div');
     newContainer.id = 'container';
     document.body.appendChild(newContainer);
-    console.log('Created container element');
   }
 
   try {
     // Transform Looker Studio data to visualization format
-    console.log('Transforming data...');
     const transformedData = transformLookerData(data);
     console.log('Transformed data:', transformedData);
 
     // Render visualization
-    console.log('Rendering timeline...');
     renderTimeline('container', transformedData, data.style);
-    console.log('Render complete');
   } catch (error) {
     console.error('Error in drawViz:', error);
     showError('Error rendering visualization: ' + error.message);
@@ -49,7 +45,6 @@ function transformLookerData(data) {
   const table = data.tables.DEFAULT;
 
   console.log('Table data:', table);
-  console.log('Table type:', typeof table);
 
   // Get headers and rows
   const headers = table.headers || [];
@@ -69,42 +64,30 @@ function transformLookerData(data) {
   console.log('Field indices map:', fieldIndices);
 
   const tripDateIdx = fieldIndices.tripDate;
-  const vehicleIdIdx = fieldIndices.vehicleId;
-  const driverIdIdx = fieldIndices.driverId;
-  const runStartTimeIdx = fieldIndices.runStartTime;
-  const runEndTimeIdx = fieldIndices.runEndTime;
+  const tripVehicleIdIdx = fieldIndices.tripVehicleId;
+  const tripDriverIdIdx = fieldIndices.tripDriverId;
   const customerIdIdx = fieldIndices.customerId;
   const puTimeIdx = fieldIndices.puTime;
   const doTimeIdx = fieldIndices.doTime;
   const puAddressIdx = fieldIndices.puAddress;
   const doAddressIdx = fieldIndices.doAddress;
+  const runDateIdx = fieldIndices.runDate;
+  const runVehicleIdIdx = fieldIndices.runVehicleId;
+  const runDriverIdIdx = fieldIndices.runDriverId;
+  const runStartTimeIdx = fieldIndices.runStartTime;
+  const runEndTimeIdx = fieldIndices.runEndTime;
 
-  console.log('Field indices:', {
-    tripDateIdx,
-    vehicleIdIdx,
-    driverIdIdx,
-    runStartTimeIdx,
-    runEndTimeIdx,
-    customerIdIdx,
-    puTimeIdx,
-    doTimeIdx,
-    puAddressIdx,
-    doAddressIdx
-  });
-
-  // Group trips by composite key: tripDate + vehicleId + driverId
   const runGroups = {};
 
   console.log('Processing rows...');
-
   if (rows.length === 0) {
     console.warn('No rows to process');
-    return { runs: [] };
+    return { runDates: [] };
   }
 
-  // Filter out rows where tripDate is null
-  const validRows = rows.filter(row => row[tripDateIdx] != null);
-  console.log('Valid rows after filtering nulls:', validRows.length);
+  // Filter out rows where both tripDate and runDate is null
+  const validRows = rows.filter(row => row[tripDateIdx] || row[runDateIdx]);
+  console.log('Valid rows after filtering nulls:', validRows);
 
   validRows.forEach((row, index) => {
     if (index < 3) {
@@ -112,90 +95,100 @@ function transformLookerData(data) {
     }
 
     const tripDate = row[tripDateIdx];
-    const vehicleId = row[vehicleIdIdx] || 'Unassigned';
-    const driverId = row[driverIdIdx] || 'Unassigned';
-    const runStartTime = row[runStartTimeIdx];
-    const runEndTime = row[runEndTimeIdx];
+    const tripVehicleId = row[tripVehicleIdIdx];
+    const tripDriverId = row[tripDriverIdIdx];
     const customerId = row[customerIdIdx];
     const puTime = row[puTimeIdx];
     const doTime = row[doTimeIdx];
     const puAddress = row[puAddressIdx];
     const doAddress = row[doAddressIdx];
 
-    if (index < 3) {
-      console.log(`Row ${index} values:`, {
-        tripDate,
-        vehicleId,
-        driverId,
-        runStartTime,
-        runEndTime,
-        customerId,
-        puTime,
-        doTime,
-        puAddress,
-        doAddress
-      });
-    }
+    const runDate = row[runDateIdx];
+    const runVehicleId = row[runVehicleIdIdx];
+    const runDriverId = row[runDriverIdIdx];
+    const runStartTime = row[runStartTimeIdx];
+    const runEndTime = row[runEndTimeIdx];
 
-    if (!tripDate) {
-      console.log(`Row ${index}: skipping - no tripDate`);
-      return;
+    const rowDate = tripDate || runDate;
+    const vehicleId = tripVehicleId || runVehicleId || 'Unassigned';
+    const vehicleSort = `${tripVehicleId || runVehicleId ? 1 : 0}${vehicleId}`;
+    const driverId = tripDriverId || runDriverId || 'Unassigned';
+    const driverSort = `${tripDriverId || runDriverId ? 1 : 0}${driverId}`;
+
+    if (!runGroups[rowDate]) runGroups[rowDate] = {
+      runDate: rowDate,
+      runs: {}
     }
 
     // Create composite key
-    const runKey = `${tripDate}|${vehicleId}|${driverId}`;
-
-    if (!runGroups[runKey]) {
-      runGroups[runKey] = {
-        tripDate: tripDate,
+    const runKey = `${rowDate}|${vehicleId}|${driverId}`;
+    if (!runGroups[rowDate].runs[runKey]) {
+      runGroups[rowDate].runs[runKey] = {
+        runId: runKey,
+        runDate: rowDate,
         vehicleId: vehicleId,
+        vehicleSort: vehicleSort,
         driverId: driverId,
+        driverSort: driverSort,
         runStartTime: formatTimeValue(runStartTime),
         runEndTime: formatTimeValue(runEndTime),
         trips: []
       };
     }
 
-    runGroups[runKey].trips.push({
-      tripId: customerId,
-      pickupTime: formatTimeValue(puTime),
-      dropoffTime: formatTimeValue(doTime),
-      pickupLocation: puAddress,
-      dropoffLocation: doAddress
-    });
+    if (tripDate) {
+      runGroups[tripDate].runs[runKey].trips.push({
+        tripId: customerId,
+        pickupTime: formatTimeValue(puTime),
+        dropoffTime: formatTimeValue(doTime),
+        pickupLocation: puAddress,
+        dropoffLocation: doAddress
+      });
+    }
   });
 
   console.log('Run groups created:', runGroups);
 
-  // Convert to runs array
-  const runs = [];
-  for (let runKey in runGroups) {
-    const run = runGroups[runKey];
+  // Convert to nested and sorted arrays
+  const runDates = [];
+  for (let dateKey in runGroups) {
+    const dateGroup = runGroups[dateKey];
 
-    // Sort trips by pickup time
-    run.trips.sort((a, b) => {
-      if (a.pickupTime < b.pickupTime) return -1;
-      if (a.pickupTime > b.pickupTime) return 1;
+    const runs = [];
+    for (let runKey in dateGroup.runs) {
+      const run = dateGroup.runs[runKey];
+      // Sort trips by pickup time
+      run.trips.sort((a, b) => {
+        if (a.pickupTime < b.pickupTime) return -1;
+        if (a.pickupTime > b.pickupTime) return 1;
+        return 0;
+      });
+      runs.push(run);
+    }
+
+    // Sort runs: by vehicleId, then by driverId
+    runs.sort((a, b) => {
+      if (a.vehicleSort < b.vehicleSort) return -1;
+      if (a.vehicleSort > b.vehicleSort) return 1;
+      // Same vehicle, sort by driver
+      if (a.driverSort < b.driverSort) return -1;
+      if (a.driverSort > b.driverSort) return 1;
       return 0;
     });
-
-    runs.push(run);
+    runDates.push({
+      runDate: dateGroup.runDate,
+      runs: runs
+    });
   }
-
-  // Sort runs: by vehicleId, then by driverId
-  runs.sort((a, b) => {
-    if (a.vehicleId < b.vehicleId) return -1;
-    if (a.vehicleId > b.vehicleId) return 1;
-    // Same vehicle, sort by driver
-    if (a.driverId < b.driverId) return -1;
-    if (a.driverId > b.driverId) return 1;
+  runDates.sort((a,b) => {
+    if (a.runDate < b.runDate) return -1;
+    if (a.runDate > b.runDate) return 1;
     return 0;
   });
 
-  console.log('Runs created and sorted:', runs);
-  console.log('Returning data with', runs.length, 'runs');
+  console.log('Runs created and sorted:', runDates);
 
-  return { runs: runs };
+  return { runDates: runDates };
 }
 
 /**
@@ -242,6 +235,10 @@ function renderTimeline(containerId, data, styleConfig) {
 
   // Create SVG container
   const svgContainer = document.createElement('div');
+  svgContainer.style.width = '100%';
+  svgContainer.style.height = (window.innerHeight || data.height || 400) + 'px';
+  svgContainer.style.overflowY = 'auto';
+  svgContainer.style.overflowX = 'auto';
   container.appendChild(svgContainer);
 
   // Create tooltip
@@ -274,38 +271,41 @@ function renderTimeline(containerId, data, styleConfig) {
 
   // Dimensions
   const margin = { top: 40, right: 60, bottom: 40, left: 120 };
-  const width = 1000 - margin.left - margin.right;
-  const height = 400 - margin.top - margin.bottom;
+  const availableWidth = window.innerWidth || 1000;
+  const width = availableWidth - margin.left - margin.right;
 
   // Create SVG
   const svg = d3.select(svgContainer)
     .append('svg')
     .attr('width', width + margin.left + margin.right)
-    .attr('height', height + margin.top + margin.bottom)
     .append('g')
     .attr('transform', `translate(${margin.left},${margin.top})`);
 
   // Parse time - handle 12-hour AM/PM format
   const parseTime = d3.timeParse('%I:%M %p');
   const formatTime = d3.timeFormat('%I:%M %p');
+  const parseDate = d3.timeParse('%Y%m%d');
+  const formatDate = d3.timeFormat('%A, %B %e, %Y');
 
   // Collect all times (trips + run schedules)
   const allTimes = [];
-  data.runs.forEach(run => {
-    // Add run schedule times
-    if (run.runStartTime) {
-      const runStart = parseTime(run.runStartTime);
-      if (runStart) allTimes.push(runStart);
-    }
-    if (run.runEndTime) {
-      const runEnd = parseTime(run.runEndTime);
-      if (runEnd) allTimes.push(runEnd);
-    }
+  data.runDates.forEach(runDate => {
+    runDate.runs.forEach(run => {
+      // Add run schedule times
+      if (run.runStartTime) {
+        const runStart = parseTime(run.runStartTime);
+        if (runStart) allTimes.push(runStart);
+      }
+      if (run.runEndTime) {
+        const runEnd = parseTime(run.runEndTime);
+        if (runEnd) allTimes.push(runEnd);
+      }
 
-    // Add trip times
-    run.trips.forEach(trip => {
-      allTimes.push(parseTime(trip.pickupTime));
-      allTimes.push(parseTime(trip.dropoffTime));
+      // Add trip times
+      run.trips.forEach(trip => {
+        allTimes.push(parseTime(trip.pickupTime));
+        allTimes.push(parseTime(trip.dropoffTime));
+      });
     });
   });
 
@@ -367,32 +367,41 @@ function renderTimeline(containerId, data, styleConfig) {
 
   // Calculate positions and heights for each run based on lane count
   const runPositions = {};
+  const datePositions = {};
   let currentY = 0;
 
-  data.runs.forEach((run, index) => {
-    const runId = `${run.vehicleId}|${run.driverId}`;
-    const tripsWithLanes = assignLanes(run.trips, parseTime);
-
-    // Determine max lane number
-    const maxLane = tripsWithLanes.length > 0
-      ? Math.max(...tripsWithLanes.map(t => t.lane))
-      : 0;
-
-    // Calculate height needed for trips
-    const tripsHeight = (maxLane + 1) * lineSpacing;
-
-    // Total run height: padding + trips + padding, with minimum for labels
-    const calculatedHeight = runPaddingTop + tripsHeight + runPaddingBottom;
-    const runHeight = Math.max(calculatedHeight, minLabelHeight);
-
-    runPositions[runId] = {
+  data.runDates.forEach((runDate) => {
+    datePositions[runDate.runDate] = {
       y: currentY,
-      height: runHeight,
-      tripsWithLanes: tripsWithLanes,
-      maxLane: maxLane
+      height: minLabelHeight,
     };
+    currentY += minLabelHeight
 
-    currentY += runHeight + runGap;
+    runDate.runs.forEach((run, index) => {
+      const runId = run.runId;
+      const tripsWithLanes = assignLanes(run.trips, parseTime);
+
+      // Determine max lane number
+      const maxLane = tripsWithLanes.length > 0
+        ? Math.max(...tripsWithLanes.map(t => t.lane))
+        : 0;
+
+      // Calculate height needed for trips
+      const tripsHeight = maxLane * lineSpacing;
+
+      // Total run height: padding + trips + padding, with minimum for labels
+      const calculatedHeight = runPaddingTop + tripsHeight + runPaddingBottom;
+      const runHeight = Math.max(calculatedHeight, minLabelHeight);
+
+      runPositions[runId] = {
+        y: currentY,
+        height: runHeight,
+        tripsWithLanes: tripsWithLanes,
+        maxLane: maxLane
+      };
+
+      currentY += runHeight + runGap;
+    });
   });
 
   // Calculate total height needed
@@ -403,6 +412,14 @@ function renderTimeline(containerId, data, styleConfig) {
     .attr('height', totalHeight + margin.top + margin.bottom);
 
   // Helper functions to replace yScale
+  function getDateY(runDate) {
+    return datePositions[runDate].y;
+  }
+
+  function getDateHeight(runDate) {
+    return datePositions[runDate].height;
+  }
+
   function getRunY(runId) {
     return runPositions[runId].y;
   }
@@ -444,239 +461,265 @@ function renderTimeline(containerId, data, styleConfig) {
   const yAxisGroup = svg.append('g')
     .attr('class', 'y-axis');
 
-  data.runs.forEach(run => {
-    const runId = `${run.vehicleId}|${run.driverId}`;
-    const runY = getRunY(runId) + (runGap / 2);
-    const runHeight = getRunHeight(runId);
-    const labelY = runY + runHeight / 2; // Center label vertically in run
+  data.runDates.forEach(runDate => {
+    const dateYPosition = getDateY(runDate.runDate);
+    const dateHeight = getDateHeight(runDate.runDate);
+    const dateLabelY = dateYPosition + dateHeight - 5;
+    const parsedDate = parseDate(runDate.runDate);
+    const dateLabel = parsedDate ? formatDate(parsedDate) : runDate.runDate;
 
-    const labelGroup = yAxisGroup.append('g')
-      .attr('transform', `translate(-10, ${labelY})`);
-
-    const text = labelGroup.append('text')
-      .style('text-anchor', 'end');
-
-    // Vehicle ID on first line
-    text.append('tspan')
+    const dateLabelGroup = yAxisGroup.append('g')
+      .attr('transform', `translate(0, ${dateLabelY})`);
+    const dateText = dateLabelGroup.append('text')
+      .style('text-anchor', 'start')
       .attr('x', 0)
-      .attr('dy', '-0.3em')
-      .style('font-size', '14px')
+      .attr('dy',0)
+      .style('font-size', '18px')
       .style('font-weight', '600')
-      .text(run.vehicleId);
+      .text(dateLabel);
 
-    // Driver ID on second line
-    text.append('tspan')
-      .attr('x', 0)
-      .attr('dy', '1.2em')
-      .style('font-size', '12px')
-      .style('font-weight', '400')
-      .style('fill', '#666')
-      .text(run.driverId);
+    runDate.runs.forEach(run => {
+      const runId = run.runId;
+      const runY = getRunY(runId) + (runGap / 2);
+      const runHeight = getRunHeight(runId);
+      const labelY = runY + runHeight / 2; // Center label vertically in run
+
+      const labelGroup = yAxisGroup.append('g')
+        .attr('transform', `translate(-10, ${labelY})`);
+      const text = labelGroup.append('text')
+        .style('text-anchor', 'end');
+
+      // Vehicle ID on first line
+      text.append('tspan')
+        .attr('x', 0)
+        .attr('dy', '-0.3em')
+        .style('font-size', '14px')
+        .style('font-weight', '600')
+        .text(run.vehicleId);
+
+      // Driver ID on second line
+      text.append('tspan')
+        .attr('x', 0)
+        .attr('dy', '1.2em')
+        .style('font-size', '12px')
+        .style('font-weight', '400')
+        .style('fill', '#666')
+        .text(run.driverId);
+    });
   });
 
   // Draw horizontal lines between runs
-  data.runs.forEach((run, index) => {
-    const runId = `${run.vehicleId}|${run.driverId}`;
-    const yPosition = getRunY(runId);
+  data.runDates.forEach((runDate, i) => {
+    runDate.runs.forEach(run => {
+      const runId = run.runId;
+      const yPosition = getRunY(runId);
+      svg.append('line')
+        .attr('x1', 0)
+        .attr('x2', width)
+        .attr('y1', yPosition)
+        .attr('y2', yPosition)
+        .attr('stroke', '#d1d5db')
+        .attr('stroke-width', 1);
+    });
+
+    const dateYPosition = getDateY(runDate.runDate);
+    const dateHeight = getDateHeight(runDate.runDate);
+    if (i) { // Don't draw the top date separater line for the first date group
+      svg.append('line')
+        .attr('x1', 0)
+        .attr('x2', width)
+        .attr('y1', dateYPosition)
+        .attr('y2', dateYPosition)
+        .attr('stroke', '#000000')
+        .attr('stroke-width', 3);
+    }
     svg.append('line')
       .attr('x1', 0)
       .attr('x2', width)
-      .attr('y1', yPosition)
-      .attr('y2', yPosition)
-      .attr('stroke', '#d1d5db')
-      .attr('stroke-width', 1);
+      .attr('y1', dateYPosition + dateHeight)
+      .attr('y2', dateYPosition + dateHeight)
+      .attr('stroke', '#000000')
+      .attr('stroke-width', 3);
   });
 
-  // Add axis labels
-  //svg.append('text')
-  //  .attr('x', width / 2)
-  //  .attr('y', totalHeight + 35)
-  //  .style('text-anchor', 'middle')
-  //  .style('font-size', '18px')
-  //  .text('Time');
-
-  //svg.append('text')
-  //  .attr('transform', 'rotate(-90)')
-  //  .attr('x', -totalHeight / 2)
-  //  .attr('y', -80)
-  //  .style('text-anchor', 'middle')
-  //  .style('font-size', '18px')
-  //  .text('Vehicle');
-
   // Draw run schedule rectangles (background)
-  data.runs.forEach(run => {
-    const runId = `${run.vehicleId}|${run.driverId}`;
-    const runYBase = getRunY(runId) + (runGap / 2);
-    const runHeight = getRunHeight(runId);
+  data.runDates.forEach(runDate => {
+    runDate.runs.forEach(run => {
+      const runId = run.runId;
+      const runYBase = getRunY(runId) + (runGap / 2);
+      const runHeight = getRunHeight(runId);
 
-    if (run.runStartTime && run.runEndTime) {
-      const runStartParsed = parseTime(run.runStartTime);
-      const runEndParsed = parseTime(run.runEndTime);
+      if (run.runStartTime && run.runEndTime) {
+        const runStartParsed = parseTime(run.runStartTime);
+        const runEndParsed = parseTime(run.runEndTime);
 
-      if (runStartParsed && runEndParsed) {
-        const x1 = xScale(runStartParsed);
-        const x2 = xScale(runEndParsed);
+        if (runStartParsed && runEndParsed) {
+          const x1 = xScale(runStartParsed);
+          const x2 = xScale(runEndParsed);
 
-        // Draw run schedule rectangle
-        svg.append('rect')
-          .attr('x', x1)
-          .attr('y', runYBase)
-          .attr('rx', 5)
-          .attr('ry', 5)
-          .attr('width', x2 - x1)
-          .attr('height', runHeight)
-          .attr('fill', runFillColor)
-          .attr('stroke', runBorderColor)
-          .attr('stroke-width', runBorderWidth)
-          .attr('opacity', runOpacity);
+          // Draw run schedule rectangle
+          svg.append('rect')
+            .attr('x', x1)
+            .attr('y', runYBase)
+            .attr('rx', 5)
+            .attr('ry', 5)
+            .attr('width', x2 - x1)
+            .attr('height', runHeight)
+            .attr('fill', runFillColor)
+            .attr('stroke', runBorderColor)
+            .attr('stroke-width', runBorderWidth)
+            .attr('opacity', runOpacity);
+        }
       }
-    }
+    });
   });
 
   // Draw trips
-  data.runs.forEach(run => {
-    const runId = `${run.vehicleId}|${run.driverId}`;
-    const runYBase = getRunY(runId) + (runGap / 2);
-    const runHeight = getRunHeight(runId);
-    const tripsWithLanes = getRunLanes(runId);
+  data.runDates.forEach(runDate => {
+    runDate.runs.forEach(run => {
+      const runId = run.runId;
+      const runYBase = getRunY(runId) + (runGap / 2);
+      const runHeight = getRunHeight(runId);
+      const tripsWithLanes = getRunLanes(runId);
 
-    // Calculate bundle height from lanes
-    const maxLane = tripsWithLanes.length > 0
-      ? Math.max(...tripsWithLanes.map(t => t.lane))
-      : 0;
-    const bundleHeight = maxLane * lineSpacing;
+      // Calculate bundle height from lanes
+      const maxLane = tripsWithLanes.length > 0
+        ? Math.max(...tripsWithLanes.map(t => t.lane))
+        : 0;
+      const bundleHeight = maxLane * lineSpacing;
 
-    // Center the bundle within the run
-    const yOffset = runYBase + (runHeight - bundleHeight) / 2;
+      // Center the bundle within the run
+      const yOffset = runYBase + (runHeight - bundleHeight) / 2;
 
-    tripsWithLanes.forEach((trip) => {
-      const yPosition = yOffset + trip.lane * lineSpacing;
-      const x1 = xScale(parseTime(trip.pickupTime));
-      const x2 = xScale(parseTime(trip.dropoffTime));
+      tripsWithLanes.forEach((trip) => {
+        const yPosition = yOffset + trip.lane * lineSpacing;
+        const x1 = xScale(parseTime(trip.pickupTime));
+        const x2 = xScale(parseTime(trip.dropoffTime));
 
-      // Trip line
-      const tripLine = svg.append('line')
-        .attr('x1', x1)
-        .attr('x2', x2)
-        .attr('y1', yPosition)
-        .attr('y2', yPosition)
-        .attr('stroke', lineColor)
-        .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.7)
-        .attr('stroke-linecap', 'round')
-        .style('cursor', 'pointer');
+        // Trip line
+        const tripLine = svg.append('line')
+          .attr('x1', x1)
+          .attr('x2', x2)
+          .attr('y1', yPosition)
+          .attr('y2', yPosition)
+          .attr('stroke', lineColor)
+          .attr('stroke-width', 2)
+          .attr('stroke-opacity', 0.7)
+          .attr('stroke-linecap', 'round')
+          .style('cursor', 'pointer');
 
-      // Hover on line
-      tripLine
-        .on('mouseenter', function(event) {
-          d3.select(this)
-            .transition()
-            .duration(100)
-            .attr('stroke-width', 3)
-            .attr('stroke-opacity', 1);
+        // Hover on line
+        tripLine
+          .on('mouseenter', function(event) {
+            d3.select(this)
+              .transition()
+              .duration(100)
+              .attr('stroke-width', 3)
+              .attr('stroke-opacity', 1);
 
-          tooltip.style.opacity = '1';
-          tooltip.style.left = (event.pageX + 10) + 'px';
-          tooltip.style.top = (event.pageY - 10) + 'px';
-          tooltip.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px">
-              ${trip.tripId}
-            </div>
-            <div style="margin-bottom: 2px"><strong>Pickup:</strong> ${trip.pickupTime}</div>
-            <div style="margin-bottom: 2px; padding-left: 10px; font-size: 12px">${trip.pickupLocation}</div>
-            <div style="margin-bottom: 2px"><strong>Dropoff:</strong> ${trip.dropoffTime}</div>
-            <div style="padding-left: 10px; font-size: 12px">${trip.dropoffLocation}</div>
-          `;
-        })
-        .on('mouseleave', function() {
-          d3.select(this)
-            .transition()
-            .duration(100)
-            .attr('stroke-width', 2)
-            .attr('stroke-opacity', 0.7);
+            tooltip.style.opacity = '1';
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px">
+                ${trip.tripId}
+              </div>
+              <div style="margin-bottom: 2px"><strong>Pickup:</strong> ${trip.pickupTime}</div>
+              <div style="margin-bottom: 2px; padding-left: 10px; font-size: 12px">${trip.pickupLocation}</div>
+              <div style="margin-bottom: 2px"><strong>Dropoff:</strong> ${trip.dropoffTime}</div>
+              <div style="padding-left: 10px; font-size: 12px">${trip.dropoffLocation}</div>
+            `;
+          })
+          .on('mouseleave', function() {
+            d3.select(this)
+              .transition()
+              .duration(100)
+              .attr('stroke-width', 2)
+              .attr('stroke-opacity', 0.7);
 
-          tooltip.style.opacity = '0';
-        });
+            tooltip.style.opacity = '0';
+          });
 
-      // Pickup marker
-      const pickupGroup = svg.append('g')
-        .style('cursor', 'pointer');
+        // Pickup marker
+        const pickupGroup = svg.append('g')
+          .style('cursor', 'pointer');
 
-      pickupGroup.append('circle')
-        .attr('cx', x1)
-        .attr('cy', yPosition)
-        .attr('r', 4)
-        .attr('fill', pickupColor)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5);
+        pickupGroup.append('circle')
+          .attr('cx', x1)
+          .attr('cy', yPosition)
+          .attr('r', 4)
+          .attr('fill', pickupColor)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5);
 
-      pickupGroup
-        .on('mouseenter', function(event) {
-          d3.select(this).select('circle')
-            .transition()
-            .duration(100)
-            .attr('r', 6);
+        pickupGroup
+          .on('mouseenter', function(event) {
+            d3.select(this).select('circle')
+              .transition()
+              .duration(100)
+              .attr('r', 6);
 
-          tooltip.style.opacity = '1';
-          tooltip.style.left = (event.pageX + 10) + 'px';
-          tooltip.style.top = (event.pageY - 10) + 'px';
-          tooltip.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px; color: ${pickupColor}">
-              PICKUP
-            </div>
-            <div style="margin-bottom: 2px"><strong>Trip:</strong> ${trip.tripId}</div>
-            <div style="margin-bottom: 2px"><strong>Time:</strong> ${trip.pickupTime}</div>
-            <div><strong>Location:</strong> ${trip.pickupLocation}</div>
-          `;
-        })
-        .on('mouseleave', function() {
-          d3.select(this).select('circle')
-            .transition()
-            .duration(100)
-            .attr('r', 4);
+            tooltip.style.opacity = '1';
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px; color: ${pickupColor}">
+                PICKUP
+              </div>
+              <div style="margin-bottom: 2px"><strong>Trip:</strong> ${trip.tripId}</div>
+              <div style="margin-bottom: 2px"><strong>Time:</strong> ${trip.pickupTime}</div>
+              <div><strong>Location:</strong> ${trip.pickupLocation}</div>
+            `;
+          })
+          .on('mouseleave', function() {
+            d3.select(this).select('circle')
+              .transition()
+              .duration(100)
+              .attr('r', 4);
 
-          tooltip.style.opacity = '0';
-        });
+            tooltip.style.opacity = '0';
+          });
 
-      // Dropoff marker
-      const dropoffGroup = svg.append('g')
-        .style('cursor', 'pointer');
+        // Dropoff marker
+        const dropoffGroup = svg.append('g')
+          .style('cursor', 'pointer');
 
-      dropoffGroup.append('circle')
-        .attr('cx', x2)
-        .attr('cy', yPosition)
-        .attr('r', 4)
-        .attr('fill', dropoffColor)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5);
+        dropoffGroup.append('circle')
+          .attr('cx', x2)
+          .attr('cy', yPosition)
+          .attr('r', 4)
+          .attr('fill', dropoffColor)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5);
 
-      dropoffGroup
-        .on('mouseenter', function(event) {
-          d3.select(this).select('circle')
-            .transition()
-            .duration(100)
-            .attr('r', 6);
+        dropoffGroup
+          .on('mouseenter', function(event) {
+            d3.select(this).select('circle')
+              .transition()
+              .duration(100)
+              .attr('r', 6);
 
-          tooltip.style.opacity = '1';
-          tooltip.style.left = (event.pageX + 10) + 'px';
-          tooltip.style.top = (event.pageY - 10) + 'px';
-          tooltip.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px; color: ${dropoffColor}">
-              DROPOFF
-            </div>
-            <div style="margin-bottom: 2px"><strong>Trip:</strong> ${trip.tripId}</div>
-            <div style="margin-bottom: 2px"><strong>Time:</strong> ${trip.dropoffTime}</div>
-            <div><strong>Location:</strong> ${trip.dropoffLocation}</div>
-          `;
-        })
-        .on('mouseleave', function() {
-          d3.select(this).select('circle')
-            .transition()
-            .duration(100)
-            .attr('r', 4);
+            tooltip.style.opacity = '1';
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.innerHTML = `
+              <div style="font-weight: 600; margin-bottom: 4px; color: ${dropoffColor}">
+                DROPOFF
+              </div>
+              <div style="margin-bottom: 2px"><strong>Trip:</strong> ${trip.tripId}</div>
+              <div style="margin-bottom: 2px"><strong>Time:</strong> ${trip.dropoffTime}</div>
+              <div><strong>Location:</strong> ${trip.dropoffLocation}</div>
+            `;
+          })
+          .on('mouseleave', function() {
+            d3.select(this).select('circle')
+              .transition()
+              .duration(100)
+              .attr('r', 4);
 
-          tooltip.style.opacity = '0';
-        });
+            tooltip.style.opacity = '0';
+          });
+      });
     });
   });
 }

@@ -1,7 +1,7 @@
 {
   "data": [
     {
-      "id": "main",
+      "id": "tripData",
       "label": "Trip Data",
       "elements": [
         {
@@ -14,8 +14,8 @@
           }
         },
         {
-          "id": "vehicleId",
-          "label": "Vehicle ID",
+          "id": "tripVehicleId",
+          "label": "Trip Vehicle ID",
           "type": "DIMENSION",
           "options": {
             "min": 1,
@@ -23,26 +23,8 @@
           }
         },
         {
-          "id": "driverId",
-          "label": "Driver ID",
-          "type": "DIMENSION",
-          "options": {
-            "min": 1,
-            "max": 1
-          }
-        },
-        {
-          "id": "runStartTime",
-          "label": "Run Start Time",
-          "type": "DIMENSION",
-          "options": {
-            "min": 1,
-            "max": 1
-          }
-        },
-        {
-          "id": "runEndTime",
-          "label": "Run End Time",
+          "id": "tripDriverId",
+          "label": "Trip Driver ID",
           "type": "DIMENSION",
           "options": {
             "min": 1,
@@ -91,6 +73,57 @@
           "type": "DIMENSION",
           "options": {
             "min": 1,
+            "max": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "runData",
+      "label": "Run Data",
+      "elements": [
+        {
+          "id": "runDate",
+          "label": "Run Date",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "runVehicleId",
+          "label": "Run Vehicle ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "runDriverId",
+          "label": "Run Driver ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "runStartTime",
+          "label": "Run Start Time",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "runEndTime",
+          "label": "Run End Time",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
             "max": 1
           }
         }
