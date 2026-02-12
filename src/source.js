@@ -254,6 +254,8 @@ function renderTimeline(containerId, data, styleConfig) {
   let runBorderColor = '#bfdbfe';
   let runBorderWidth = 1;
   let runOpacity = 0.5;
+  let tripLineWidth = 2;
+  let markerSize = 4;
 
   try {
     if (styleConfig) {
@@ -264,6 +266,8 @@ function renderTimeline(containerId, data, styleConfig) {
       runBorderColor = styleConfig.runBorderColor?.value?.color || runBorderColor;
       runBorderWidth = styleConfig.runBorderWidth?.value || runBorderWidth;
       runOpacity = styleConfig.runOpacity?.value || runOpacity;
+      tripLineWidth = styleConfig.tripLineWidth?.value || tripLineWidth;
+      markerSize = styleConfig.markerSize?.value || markerSize;
     }
   } catch (error) {
     console.error('Error accessing style config:', error);
@@ -603,7 +607,7 @@ function renderTimeline(containerId, data, styleConfig) {
           .attr('y1', yPosition)
           .attr('y2', yPosition)
           .attr('stroke', lineColor)
-          .attr('stroke-width', 2)
+          .attr('stroke-width', tripLineWidth)
           .attr('stroke-opacity', 0.7)
           .attr('stroke-linecap', 'round')
           .style('cursor', 'pointer');
@@ -614,7 +618,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this)
               .transition()
               .duration(100)
-              .attr('stroke-width', 3)
+              .attr('stroke-width', tripLineWidth + 1)
               .attr('stroke-opacity', 1);
 
             tooltip.style.opacity = '1';
@@ -634,7 +638,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this)
               .transition()
               .duration(100)
-              .attr('stroke-width', 2)
+              .attr('stroke-width', tripLineWidth)
               .attr('stroke-opacity', 0.7);
 
             tooltip.style.opacity = '0';
@@ -647,7 +651,7 @@ function renderTimeline(containerId, data, styleConfig) {
         pickupGroup.append('circle')
           .attr('cx', x1)
           .attr('cy', yPosition)
-          .attr('r', 4)
+          .attr('r', markerSize)
           .attr('fill', pickupColor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.5);
@@ -657,7 +661,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 6);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '1';
             tooltip.style.left = (event.pageX + 10) + 'px';
@@ -675,7 +679,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 4);
+              .attr('r', markerSize);
 
             tooltip.style.opacity = '0';
           });
@@ -687,7 +691,7 @@ function renderTimeline(containerId, data, styleConfig) {
         dropoffGroup.append('circle')
           .attr('cx', x2)
           .attr('cy', yPosition)
-          .attr('r', 4)
+          .attr('r', markerSize)
           .attr('fill', dropoffColor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.5);
@@ -697,7 +701,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 6);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '1';
             tooltip.style.left = (event.pageX + 10) + 'px';
@@ -715,7 +719,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 4);
+              .attr('r', markerSize);
 
             tooltip.style.opacity = '0';
           });
