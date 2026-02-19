@@ -93,6 +93,7 @@ function transformLookerData(data) {
   const tripDateIdx = fieldIndices.tripDate;
   const tripVehicleIdIdx = fieldIndices.tripVehicleId;
   const tripDriverIdIdx = fieldIndices.tripDriverId;
+  const tripShiftIdIdx = fieldIndices.tripShiftId;
   const customerIdIdx = fieldIndices.customerId;
   const puTimeIdx = fieldIndices.puTime;
   const doTimeIdx = fieldIndices.doTime;
@@ -101,6 +102,7 @@ function transformLookerData(data) {
   const runDateIdx = fieldIndices.runDate;
   const runVehicleIdIdx = fieldIndices.runVehicleId;
   const runDriverIdIdx = fieldIndices.runDriverId;
+  const runShiftIdIdx = fieldIndices.runShiftId;
   const runStartTimeIdx = fieldIndices.runStartTime;
   const runEndTimeIdx = fieldIndices.runEndTime;
 
@@ -124,6 +126,7 @@ function transformLookerData(data) {
     const tripDate = row[tripDateIdx];
     const tripVehicleId = row[tripVehicleIdIdx];
     const tripDriverId = row[tripDriverIdIdx];
+    const tripShiftId = row[tripShiftIdIdx];
     const customerId = row[customerIdIdx];
     const puTime = row[puTimeIdx];
     const doTime = row[doTimeIdx];
@@ -133,6 +136,7 @@ function transformLookerData(data) {
     const runDate = row[runDateIdx];
     const runVehicleId = row[runVehicleIdIdx];
     const runDriverId = row[runDriverIdIdx];
+    const runShiftId = row[runShiftIdIdx];
     const runStartTime = row[runStartTimeIdx];
     const runEndTime = row[runEndTimeIdx];
 
@@ -141,6 +145,7 @@ function transformLookerData(data) {
     const vehicleSort = `${tripVehicleId || runVehicleId ? 1 : 0}${vehicleId}`;
     const driverId = tripDriverId || runDriverId || 'Unassigned';
     const driverSort = `${tripDriverId || runDriverId ? 1 : 0}${driverId}`;
+    const shiftId = tripShiftId || runShiftId;
 
     if (!runGroups[rowDate]) runGroups[rowDate] = {
       runDate: rowDate,
@@ -148,7 +153,7 @@ function transformLookerData(data) {
     }
 
     // Create composite key
-    const runKey = `${rowDate}|${vehicleId}|${driverId}`;
+    const runKey = `${rowDate}|${vehicleId}|${driverId}|${shiftId}`;
     if (!runGroups[rowDate].runs[runKey]) {
       runGroups[rowDate].runs[runKey] = {
         runId: runKey,
@@ -157,6 +162,7 @@ function transformLookerData(data) {
         vehicleSort: vehicleSort,
         driverId: driverId,
         driverSort: driverSort,
+        shiftId: shiftId,
         runStartTime: formatTimeValue(runStartTime),
         runEndTime: formatTimeValue(runEndTime),
         trips: []
@@ -281,6 +287,8 @@ function renderTimeline(containerId, data, styleConfig) {
   let runBorderColor = '#bfdbfe';
   let runBorderWidth = 1;
   let runOpacity = 0.5;
+  let tripLineWidth = 2;
+  let markerSize = 1;
 
   try {
     if (styleConfig) {
@@ -291,6 +299,8 @@ function renderTimeline(containerId, data, styleConfig) {
       runBorderColor = styleConfig.runBorderColor?.value?.color || runBorderColor;
       runBorderWidth = styleConfig.runBorderWidth?.value || runBorderWidth;
       runOpacity = styleConfig.runOpacity?.value || runOpacity;
+      tripLineWidth = styleConfig.tripLineWidth?.value || tripLineWidth;
+      markerSize = styleConfig.markerSize?.value || markerSize;
     }
   } catch (error) {
     console.error('Error accessing style config:', error);
@@ -510,6 +520,7 @@ function renderTimeline(containerId, data, styleConfig) {
       const runY = getRunY(runId) + (runGap / 2);
       const runHeight = getRunHeight(runId);
       const labelY = runY + runHeight / 2; // Center label vertically in run
+      const driverId = `${run.driverId}${run.shiftId ? " — " + run.shiftId : ""}`
 
       const labelGroup = yAxisGroup.append('g')
         .attr('transform', `translate(-10, ${labelY})`);
@@ -531,7 +542,7 @@ function renderTimeline(containerId, data, styleConfig) {
         .style('font-size', '12px')
         .style('font-weight', '400')
         .style('fill', '#666')
-        .text(run.driverId);
+        .text(driverId);
     });
   });
 
@@ -630,7 +641,7 @@ function renderTimeline(containerId, data, styleConfig) {
           .attr('y1', yPosition)
           .attr('y2', yPosition)
           .attr('stroke', lineColor)
-          .attr('stroke-width', 2)
+          .attr('stroke-width', tripLineWidth)
           .attr('stroke-opacity', 0.7)
           .attr('stroke-linecap', 'round')
           .style('cursor', 'pointer');
@@ -641,7 +652,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this)
               .transition()
               .duration(100)
-              .attr('stroke-width', 3)
+              .attr('stroke-width', tripLineWidth + 1)
               .attr('stroke-opacity', 1);
 
             tooltip.style.opacity = '1';
@@ -661,7 +672,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this)
               .transition()
               .duration(100)
-              .attr('stroke-width', 2)
+              .attr('stroke-width', tripLineWidth)
               .attr('stroke-opacity', 0.7);
 
             tooltip.style.opacity = '0';
@@ -674,7 +685,7 @@ function renderTimeline(containerId, data, styleConfig) {
         pickupGroup.append('circle')
           .attr('cx', x1)
           .attr('cy', yPosition)
-          .attr('r', 4)
+          .attr('r', markerSize + 2)
           .attr('fill', pickupColor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.5);
@@ -684,7 +695,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 6);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '1';
             tooltip.style.left = (event.pageX + 10) + 'px';
@@ -702,7 +713,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 4);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '0';
           });
@@ -714,7 +725,7 @@ function renderTimeline(containerId, data, styleConfig) {
         dropoffGroup.append('circle')
           .attr('cx', x2)
           .attr('cy', yPosition)
-          .attr('r', 4)
+          .attr('r', markerSize + 2)
           .attr('fill', dropoffColor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.5);
@@ -724,7 +735,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 6);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '1';
             tooltip.style.left = (event.pageX + 10) + 'px';
@@ -742,7 +753,7 @@ function renderTimeline(containerId, data, styleConfig) {
             d3.select(this).select('circle')
               .transition()
               .duration(100)
-              .attr('r', 4);
+              .attr('r', markerSize + 2);
 
             tooltip.style.opacity = '0';
           });

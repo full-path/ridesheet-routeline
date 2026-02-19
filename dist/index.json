@@ -32,6 +32,15 @@
           }
         },
         {
+          "id": "tripShiftId",
+          "label": "Trip Shift ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
           "id": "customerId",
           "label": "Customer Name and ID",
           "type": "DIMENSION",
@@ -110,6 +119,15 @@
           }
         },
         {
+          "id": "runShiftId",
+          "label": "Run Shift ID",
+          "type": "DIMENSION",
+          "options": {
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
           "id": "runStartTime",
           "label": "Run Start Time",
           "type": "DIMENSION",
@@ -152,6 +170,18 @@
           "id": "dropoffColor",
           "label": "Dropoff Marker Color",
           "defaultValue": "#ef4444"
+        },
+        {
+          "type": "LINE_WEIGHT",
+          "id": "tripLineWidth",
+          "label": "Trip Line Width",
+          "defaultValue": 2
+        },
+        {
+          "type": "LINE_WEIGHT",
+          "id": "markerSize",
+          "label": "Pickup/Dropoff Marker Size",
+          "defaultValue": 1
         }
       ]
     },
