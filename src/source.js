@@ -320,7 +320,7 @@ function renderTimeline(containerId, data, styleConfig) {
   });
 
   const timeExtent = d3.extent(allTimes);
-  const paddingMinutes = 10;
+  const paddingMinutes = 30;
 
   // Time scale
   const xScale = d3.scaleTime()
@@ -580,6 +580,29 @@ function renderTimeline(containerId, data, styleConfig) {
             .attr('stroke', runBorderColor)
             .attr('stroke-width', runBorderWidth)
             .attr('opacity', runOpacity);
+
+          // Calculate vertical center for labels
+          const labelY = runYBase + runHeight / 2;
+
+          // Draw start time label (left of rectangle)
+          svg.append('text')
+            .attr('x', x1 - 5)
+            .attr('y', labelY)
+            .attr('dy', '0.35em')
+            .style('text-anchor', 'end')
+            .style('font-size', '11px')
+            .style('fill', '#666')
+            .text(run.runStartTime);
+
+          // Draw end time label (right of rectangle)
+          svg.append('text')
+            .attr('x', x2 + 5)
+            .attr('y', labelY)
+            .attr('dy', '0.35em')
+            .style('text-anchor', 'start')
+            .style('font-size', '11px')
+            .style('fill', '#666')
+            .text(run.runEndTime);
         }
       }
     });
