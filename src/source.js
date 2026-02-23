@@ -331,11 +331,11 @@ function renderTimeline(containerId, data, styleConfig) {
     .range([0, width]);
 
   // Constants for run height calculation
-  const lineSpacing = 10;           // Vertical spacing between trip lanes
-  const runPaddingTop = 15;         // Padding above trips
-  const runPaddingBottom = 15;      // Padding below trips
-  const minLabelHeight = 40;        // Minimum height for vehicle/driver labels
-  const runGap = 20;                // Gap between runs
+  const lineSpacing = (2 * markerSize) + 8;   // Vertical spacing between trip lanes
+  const runPaddingTop = 15;                   // Padding above trips
+  const runPaddingBottom = 15;                // Padding below trips
+  const minLabelHeight = 40;                  // Minimum height for vehicle/driver labels
+  const runGap = 20;                          // Gap between runs
 
   // Pre-calculate lane assignments for all runs to determine heights
   function assignLanes(trips, parseTime) {
@@ -512,7 +512,7 @@ function renderTimeline(containerId, data, styleConfig) {
       text.append('tspan')
         .attr('x', 0)
         .attr('dy', '1.2em')
-        .style('font-size', '12px')
+        .style('font-size', '14px')
         .style('font-weight', '400')
         .style('fill', '#666')
         .text(driverId);
@@ -683,8 +683,8 @@ function renderTimeline(containerId, data, styleConfig) {
           .attr('cy', yPosition)
           .attr('r', markerSize + 2)
           .attr('fill', pickupColor)
-          .attr('stroke', '#fff')
-          .attr('stroke-width', 1.5);
+          .attr('stroke', pickupColor)
+          .attr('stroke-width', 1);
 
         pickupGroup
           .on('mouseenter', function(event) {
@@ -723,8 +723,8 @@ function renderTimeline(containerId, data, styleConfig) {
           .attr('cy', yPosition)
           .attr('r', markerSize + 2)
           .attr('fill', dropoffColor)
-          .attr('stroke', '#fff')
-          .attr('stroke-width', 1.5);
+          .attr('stroke',dropoffColor)
+          .attr('stroke-width', 1);
 
         dropoffGroup
           .on('mouseenter', function(event) {
