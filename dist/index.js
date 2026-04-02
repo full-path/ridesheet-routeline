@@ -114,8 +114,9 @@ function transformLookerData(data) {
     return { runDates: [] };
   }
 
-  // Filter out rows where both tripDate and runDate is null
-  const validRows = rows.filter(row => row[tripDateIdx] || row[runDateIdx]);
+  // Filter out rows where both tripDate and runDate is null.
+  // If there's a tripDate, then PU and DO times must also be present.
+  const validRows = rows.filter(row => (row[tripDateIdx] && row[puTimeIdx] && row[doTimeIdx]) || row[runDateIdx]);
   console.log('Valid rows after filtering nulls:', validRows);
 
   validRows.forEach((row, index) => {
@@ -359,10 +360,10 @@ function renderTimeline(containerId, data, styleConfig) {
 
   // Constants for run height calculation
   const lineSpacing = (2 * markerSize) + 8;   // Vertical spacing between trip lanes
-  const runPaddingTop = 15;             // Padding above trips
-  const runPaddingBottom = 15;          // Padding below trips
-  const minLabelHeight = 40;            // Minimum height for vehicle/driver labels
-  const runGap = 20;                    // Gap between runs
+  const runPaddingTop = 15;                   // Padding above trips
+  const runPaddingBottom = 15;                // Padding below trips
+  const minLabelHeight = 40;                  // Minimum height for vehicle/driver labels
+  const runGap = 20;                          // Gap between runs
 
   // Pre-calculate lane assignments for all runs to determine heights
   function assignLanes(trips, parseTime) {
